@@ -5,26 +5,33 @@
 """
 
 import os
+import re
+import time
 import requests
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
-import json
-import time
-import re
 
 # ─── 설정 ─────────────────────────────────────────────
 SPREADSHEET_ID = "1jWL31J8bqKLE9OC0CW7Q8Ac6HpzpLE2L_q5L5SNGmAA"
-NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID")        # 네이버 개발자센터에서 발급
+NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID")
 NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET")
 
-# 수집할 무게 목록 (oz 기준)
 WEIGHTS = ["1/8", "1/4", "3/8", "1/2", "3/4", "1"]
-
-# oz → g 변환
 OZ_TO_G = {
     "1/8": 3.5, "1/4": 7.1, "3/8": 10.6,
     "1/2": 14.2, "3/4": 21.3, "1": 28.4
+}
+
+# 환율 (USD → KRW)
+USD_TO_KRW = 1380
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
 }
 
 # ─── Google Sheets 연결 ───────────────────────────────
@@ -33,8 +40,6 @@ def connect_sheets():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
-    # GitHub Actions에서는 환경변수로 주입
-    import os
     creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
     if creds_json:
         import tempfile
@@ -44,11 +49,10 @@ def connect_sheets():
         creds = ServiceAccountCredentials.from_json_keyfile_name(creds_file, scope)
     else:
         creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
-    
     client = gspread.authorize(creds)
     return client.open_by_key(SPREADSHEET_ID)
 
-# ─── 네이버쇼핑 크롤러 ────────────────────────────────
+# ─── 네이버쇼핑 ────────────────────────────────────────
 def crawl_naver(weight_oz):
     g = OZ_TO_G[weight_oz]
     query = f"텅스텐 싱커 {g}g"
@@ -57,15 +61,13 @@ def crawl_naver(weight_oz):
         "X-Naver-Client-Id": NAVER_CLIENT_ID,
         "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
     }
-    params = {"query": query, "display": 5, "sort": "asc"}  # 가격 낮은 순
-
+    params = {"query": query, "display": 5, "sort": "asc"}
     try:
         res = requests.get(url, headers=headers, params=params, timeout=10)
         data = res.json()
         items = data.get("items", [])
         if not items:
             return None
-        # 최저가 추출 (HTML 태그 제거)
         prices = []
         for item in items:
             price_str = re.sub(r"<[^>]+>", "", str(item.get("lprice", 0)))
@@ -75,85 +77,147 @@ def crawl_naver(weight_oz):
                 pass
         return min(prices) if prices else None
     except Exception as e:
-        print(f"[네이버] 오류: {e}")
+        print(f"  [네이버] 오류: {e}")
         return None
 
-# ─── 알리익스프레스 크롤러 ────────────────────────────
+# ─── 알리익스프레스 ────────────────────────────────────
 def crawl_ali(weight_oz):
     g = OZ_TO_G[weight_oz]
-    # 알리 비공식 검색 API
     query = f"tungsten fishing sinker {g}g"
     url = "https://www.aliexpress.com/wholesale"
     params = {"SearchText": query, "SortType": "price_asc"}
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept-Language": "ko-KR,ko;q=0.9",
-    }
     try:
-        res = requests.get(url, params=params, headers=headers, timeout=15)
-        # 가격 패턴 추출 (USD)
+        res = requests.get(url, params=params, headers=HEADERS, timeout=15)
         prices = re.findall(r'"salePrice":\{"currency":"USD","value":"([\d.]+)"', res.text)
         if not prices:
             prices = re.findall(r'US \$([\d.]+)', res.text)
         if prices:
-            usd_price = float(min(prices, key=float))
-            # USD → KRW (환율 고정값, 실제로는 환율 API 사용 권장)
-            krw = int(usd_price * 1380)
-            return krw
+            usd = float(min(prices, key=float))
+            return int(usd * USD_TO_KRW)
         return None
     except Exception as e:
-        print(f"[알리] 오류: {e}")
+        print(f"  [알리] 오류: {e}")
         return None
 
-# ─── 테무 크롤러 ─────────────────────────────────────
+# ─── 아마존 ───────────────────────────────────────────
+def crawl_amazon(weight_oz):
+    g = OZ_TO_G[weight_oz]
+    oz = weight_oz.replace("/", "%2F")
+    query = f"tungsten+fishing+sinker+{oz}oz"
+    url = f"https://www.amazon.com/s?k={query}&s=price-asc-rank"
+    headers = {**HEADERS, "Accept-Language": "en-US,en;q=0.9"}
+    try:
+        res = requests.get(url, headers=headers, timeout=15)
+        # 가격 패턴 여러 가지 시도
+        patterns = [
+            r'"price":\{"amount":"([\d.]+)"',
+            r'<span class="a-price-whole">([\d,]+)',
+            r'"priceAmount":([\d.]+)',
+            r'data-a-price.*?"([\d.]+)"',
+        ]
+        prices = []
+        for pattern in patterns:
+            found = re.findall(pattern, res.text)
+            for p in found:
+                try:
+                    prices.append(float(p.replace(",", "")))
+                except:
+                    pass
+        if prices:
+            usd = min(p for p in prices if p > 0.5)  # 0.5달러 미만은 노이즈 제거
+            return int(usd * USD_TO_KRW)
+        return None
+    except Exception as e:
+        print(f"  [아마존] 오류: {e}")
+        return None
+
+# ─── 이베이 ───────────────────────────────────────────
+def crawl_ebay(weight_oz):
+    g = OZ_TO_G[weight_oz]
+    query = f"tungsten fishing sinker {weight_oz}oz {g}g"
+    url = "https://www.ebay.com/sch/i.html"
+    params = {"_nkw": query, "_sop": "15"}  # 15 = 가격 낮은 순
+    headers = {**HEADERS, "Accept-Language": "en-US,en;q=0.9"}
+    try:
+        res = requests.get(url, params=params, headers=headers, timeout=15)
+        # 이베이 가격 패턴
+        patterns = [
+            r'"price":\{"value":([\d.]+)',
+            r'class="s-item__price"[^>]*>\$?([\d.]+)',
+            r'\$\s*([\d]+\.[\d]{2})',
+        ]
+        prices = []
+        for pattern in patterns:
+            found = re.findall(pattern, res.text)
+            for p in found:
+                try:
+                    val = float(p.replace(",", ""))
+                    if 0.5 < val < 500:  # 합리적인 범위만
+                        prices.append(val)
+                except:
+                    pass
+        if prices:
+            usd = min(prices)
+            return int(usd * USD_TO_KRW)
+        return None
+    except Exception as e:
+        print(f"  [이베이] 오류: {e}")
+        return None
+
+# ─── 테무 ─────────────────────────────────────────────
 def crawl_temu(weight_oz):
     g = OZ_TO_G[weight_oz]
     query = f"tungsten sinker {g}g fishing"
     url = "https://www.temu.com/search_result.html"
     params = {"search_key": query}
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    }
     try:
-        res = requests.get(url, params=params, headers=headers, timeout=15)
-        prices = re.findall(r'"price":([\d.]+)', res.text)
+        res = requests.get(url, params=params, headers=HEADERS, timeout=15)
+        patterns = [
+            r'"price":([\d.]+)',
+            r'"sale_price":([\d.]+)',
+            r'"display_price":"\\$([\d.]+)"',
+        ]
+        prices = []
+        for pattern in patterns:
+            found = re.findall(pattern, res.text)
+            for p in found:
+                try:
+                    val = float(p)
+                    if 0.5 < val < 100:
+                        prices.append(val)
+                except:
+                    pass
         if prices:
-            usd_price = float(min(prices, key=float))
-            return int(usd_price * 1380)
+            usd = min(prices)
+            return int(usd * USD_TO_KRW)
         return None
     except Exception as e:
-        print(f"[테무] 오류: {e}")
+        print(f"  [테무] 오류: {e}")
         return None
 
-# ─── Sheets에 저장 ────────────────────────────────────
+# ─── Sheets 저장 ──────────────────────────────────────
 def save_to_sheets(book, results):
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    # 시트1: 최신 가격 (트래커가 읽는 곳)
+    # 최신가격 시트
     try:
         sheet_latest = book.worksheet("최신가격")
     except:
         sheet_latest = book.add_worksheet("최신가격", rows=100, cols=20)
-        sheet_latest.append_row(["무게(oz)", "무게(g)", "네이버", "알리", "아마존", "이베이", "테무", "마지막업데이트"])
 
-    # 기존 데이터 클리어 후 재작성
     sheet_latest.clear()
     sheet_latest.append_row(["무게(oz)", "무게(g)", "네이버", "알리", "아마존", "이베이", "테무", "마지막업데이트"])
     for weight, prices in results.items():
         row = [
-            weight,
-            OZ_TO_G.get(weight, ""),
-            prices.get("naver", ""),
-            prices.get("ali", ""),
-            prices.get("amazon", ""),
-            prices.get("ebay", ""),
-            prices.get("temu", ""),
-            now,
+            weight, OZ_TO_G.get(weight, ""),
+            prices.get("naver", ""), prices.get("ali", ""),
+            prices.get("amazon", ""), prices.get("ebay", ""),
+            prices.get("temu", ""), now,
         ]
         sheet_latest.append_row(row)
         time.sleep(0.3)
 
-    # 시트2: 히스토리 (날짜별 기록)
+    # 히스토리 시트
     try:
         sheet_history = book.worksheet("히스토리")
     except:
@@ -162,12 +226,9 @@ def save_to_sheets(book, results):
 
     for weight, prices in results.items():
         row = [
-            now,
-            weight,
-            prices.get("naver", ""),
-            prices.get("ali", ""),
-            prices.get("amazon", ""),
-            prices.get("ebay", ""),
+            now, weight,
+            prices.get("naver", ""), prices.get("ali", ""),
+            prices.get("amazon", ""), prices.get("ebay", ""),
             prices.get("temu", ""),
         ]
         sheet_history.append_row(row)
@@ -175,7 +236,7 @@ def save_to_sheets(book, results):
 
     print(f"✅ Sheets 저장 완료: {now}")
 
-# ─── 메인 실행 ────────────────────────────────────────
+# ─── 메인 ─────────────────────────────────────────────
 def main():
     print("🎣 텅스텐 싱커 가격 수집 시작...")
     results = {}
@@ -194,18 +255,23 @@ def main():
         print(f"  알리: {ali:,}원" if ali else "  알리: 실패")
         time.sleep(1)
 
+        amazon = crawl_amazon(weight)
+        prices["amazon"] = amazon
+        print(f"  아마존: {amazon:,}원" if amazon else "  아마존: 실패")
+        time.sleep(2)
+
+        ebay = crawl_ebay(weight)
+        prices["ebay"] = ebay
+        print(f"  이베이: {ebay:,}원" if ebay else "  이베이: 실패")
+        time.sleep(2)
+
         temu = crawl_temu(weight)
         prices["temu"] = temu
         print(f"  테무: {temu:,}원" if temu else "  테무: 실패")
         time.sleep(1)
 
-        # 아마존/이베이는 별도 구현 필요 (구조 복잡)
-        prices["amazon"] = None
-        prices["ebay"] = None
-
         results[weight] = prices
 
-    # Sheets 저장
     book = connect_sheets()
     save_to_sheets(book, results)
     print("\n🏁 완료!")
