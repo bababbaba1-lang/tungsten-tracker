@@ -42,7 +42,7 @@ function MiniSparkline({ data }) {
   if (vals.length < 2) return null;
   const max = Math.max(...vals), min = Math.min(...vals);
   const range = max - min || 1;
-  const w = 80, h = 28, pad = 3;
+  const w = 72, h = 26, pad = 3;
   const pts = vals.map((v, i) => {
     const x = pad + (i / (vals.length - 1)) * (w - pad * 2);
     const y = h - pad - ((v - min) / range) * (h - pad * 2);
@@ -62,8 +62,8 @@ function MiniSparkline({ data }) {
   );
 }
 
-const RANK_COLORS = ["#d4a843", "#9ca3af", "#b87333"];
-const RANK_LABELS = ["1ST", "2ND", "3RD", "4TH", "5TH"];
+const RANK_MEDALS = ["🥇", "🥈", "🥉", "4위", "5위"];
+const RANK_COLORS = ["#d4a843", "#b0b8c8", "#cd7f32", "#6a7080", "#6a7080"];
 
 export default function App() {
   const [selectedWeight, setSelectedWeight] = useState("1/4");
@@ -86,14 +86,13 @@ export default function App() {
         const row = latest.find(r => r["업데이트"]);
         if (row) setLastUpdate(row["업데이트"]);
       } catch (e) {
-        setError("데이터 로딩 실패");
+        setError("데이터 로딩 실패 — Sheets 공개 설정을 확인하세요");
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  // 선택한 무게의 쇼핑몰 리스트
   const shops = allData
     .filter(r => r["무게(oz)"] === selectedWeight && r["쇼핑몰"] !== "없음" && r["가격"])
     .map(r => ({
@@ -105,7 +104,6 @@ export default function App() {
     }))
     .sort((a, b) => a.rank - b.rank);
 
-  // 히스토리에서 선택 무게 7일 데이터
   const weightHistory = historyData
     .filter(r => r["무게(oz)"] === selectedWeight && r["1위가격"])
     .slice(-7)
@@ -114,128 +112,134 @@ export default function App() {
   const bestPrice = shops[0]?.price || null;
   const bestMall = shops[0]?.mall || null;
 
-  // 가격 변동률 (첫번째 vs 마지막 히스토리)
   const priceTrend = (() => {
     const valid = weightHistory.map(Number).filter(v => !isNaN(v) && v > 0);
     if (valid.length < 2) return null;
-    const pct = ((valid[valid.length - 1] - valid[0]) / valid[0] * 100).toFixed(1);
-    return parseFloat(pct);
+    return parseFloat(((valid[valid.length - 1] - valid[0]) / valid[0] * 100).toFixed(1));
   })();
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0c0f", color: "#e2e0d8", fontFamily: "'IBM Plex Mono', monospace" }}>
+    <div style={{ minHeight: "100vh", background: "#0d0f13", color: "#dfe1e8", fontFamily: "'IBM Plex Mono', monospace" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-track { background: #111; } ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
-        .wbtn { transition: all 0.12s ease; cursor: pointer; border: none; outline: none; }
-        .wbtn:hover { background: #1e2128 !important; color: #d4a843 !important; }
-        .shop-row { transition: background 0.12s ease; }
-        .shop-row:hover { background: #131619 !important; }
-        .link-btn { transition: all 0.12s ease; cursor: pointer; text-decoration: none; }
-        .link-btn:hover { background: #d4a843 !important; color: #0a0c0f !important; }
+        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #181b22; } ::-webkit-scrollbar-thumb { background: #2e3340; border-radius: 2px; }
+        .wbtn { cursor: pointer; border: none; outline: none; transition: all 0.13s; }
+        .wbtn:hover { transform: translateY(-1px); }
+        .shop-row { transition: background 0.12s; }
+        .shop-row:hover { background: #161921 !important; }
+        .link-btn { text-decoration: none; transition: all 0.13s; display: inline-block; }
+        .link-btn:hover { background: #d4a843 !important; color: #0d0f13 !important; transform: translateY(-1px); }
       `}</style>
 
       {/* Header */}
       <div style={{
-        borderBottom: "1px solid #1a1d22", padding: "14px 32px",
+        background: "#0d0f13",
+        borderBottom: "1px solid #1f2330",
+        padding: "16px 32px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: "#0a0c0f", position: "sticky", top: 0, zIndex: 100,
+        position: "sticky", top: 0, zIndex: 100,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{
-            width: 30, height: 30, background: "#d4a843",
+            width: 34, height: 34, background: "#d4a843",
             clipPath: "polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)",
+            flexShrink: 0,
           }} />
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "0.1em", color: "#e8e4d8" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.1em", color: "#f0ede4" }}>
               TUNGSTEN TRACKER
             </div>
-            <div style={{ fontSize: 9, color: "#4a4e58", letterSpacing: "0.15em", fontFamily: "'Noto Sans KR', sans-serif", marginTop: 1 }}>
-              네이버 쇼핑 텅스텐 싱커 최저가
+            <div style={{ fontSize: 10, color: "#5c6070", letterSpacing: "0.12em", fontFamily: "'Noto Sans KR', sans-serif", marginTop: 1 }}>
+              네이버 쇼핑 텅스텐 싱커 최저가 비교
             </div>
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 9, color: "#4a4e58", letterSpacing: "0.1em", marginBottom: 2 }}>LAST UPDATE</div>
-          <div style={{ fontSize: 11, color: loading ? "#4a4e58" : "#d4a843" }}>
+          <div style={{ fontSize: 9, color: "#5c6070", letterSpacing: "0.12em", marginBottom: 3 }}>LAST UPDATE</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: loading ? "#5c6070" : "#d4a843" }}>
             {loading ? "로딩 중..." : lastUpdate || "—"}
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 780, margin: "0 auto", padding: "28px 24px" }}>
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "32px 24px" }}>
 
         {error && (
-          <div style={{ background: "#1a0808", border: "1px solid #f87171", borderRadius: 4, padding: "10px 14px", marginBottom: 20, fontSize: 11, color: "#f87171", fontFamily: "'Noto Sans KR', sans-serif" }}>
+          <div style={{ background: "#1c0a0a", border: "1px solid #f87171", borderRadius: 6, padding: "12px 16px", marginBottom: 24, fontSize: 12, color: "#f87171", fontFamily: "'Noto Sans KR', sans-serif" }}>
             ⚠️ {error}
           </div>
         )}
 
         {/* Weight selector */}
         <div style={{ marginBottom: 32 }}>
-          <div style={{ fontSize: 9, color: "#4a4e58", letterSpacing: "0.15em", marginBottom: 10 }}>WEIGHT</div>
-          <div style={{ display: "flex", gap: 3 }}>
-            {WEIGHTS.map(w => (
-              <button key={w.oz} className="wbtn" onClick={() => setSelectedWeight(w.oz)} style={{
-                flex: 1, padding: "10px 4px", fontSize: 12, borderRadius: 3,
-                background: selectedWeight === w.oz ? "#d4a843" : "#111417",
-                color: selectedWeight === w.oz ? "#0a0c0f" : "#5a5e68",
-                fontWeight: selectedWeight === w.oz ? 700 : 400,
-                border: `1px solid ${selectedWeight === w.oz ? "#d4a843" : "#1e2128"}`,
-                fontFamily: "'IBM Plex Mono', monospace",
-              }}>
-                <div>{w.oz}</div>
-                <div style={{ fontSize: 9, marginTop: 2, opacity: 0.7 }}>{w.g}g</div>
-              </button>
-            ))}
+          <div style={{ fontSize: 10, color: "#5c6070", letterSpacing: "0.18em", marginBottom: 12 }}>
+            — WEIGHT SELECTION —
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {WEIGHTS.map(w => {
+              const active = selectedWeight === w.oz;
+              return (
+                <button key={w.oz} className="wbtn" onClick={() => setSelectedWeight(w.oz)} style={{
+                  flex: 1, padding: "12px 6px", borderRadius: 6,
+                  background: active ? "#d4a843" : "#13161e",
+                  border: `1px solid ${active ? "#d4a843" : "#252836"}`,
+                  fontFamily: "'IBM Plex Mono', monospace",
+                }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: active ? "#0d0f13" : "#9aa0b0" }}>
+                    {w.oz}
+                  </div>
+                  <div style={{ fontSize: 10, color: active ? "#0d0f13" : "#5c6070", marginTop: 3 }}>
+                    {w.g}g
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Summary bar */}
-        <div style={{
-          display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
-          gap: 8, marginBottom: 24,
-        }}>
+        {/* Summary cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 28 }}>
           {[
             {
               label: "네이버 최저가",
               value: loading ? "..." : bestPrice ? `₩${bestPrice.toLocaleString()}` : "—",
               sub: bestMall || `${selectedWeight}oz · ${WEIGHTS.find(w => w.oz === selectedWeight)?.g}g`,
               accent: "#d4a843",
+              icon: "💰",
             },
             {
               label: "최저가 쇼핑몰",
               value: loading ? "..." : bestMall || "—",
-              sub: shops.length > 0 ? `${shops.length}개 쇼핑몰 비교` : "데이터 없음",
+              sub: shops.length > 0 ? `${shops.length}개 쇼핑몰 비교` : "수집 중",
               accent: "#4ade80",
+              icon: "🏪",
             },
             {
               label: "7일 가격 추이",
-              value: priceTrend !== null
-                ? `${priceTrend > 0 ? "+" : ""}${priceTrend}%`
-                : "—",
-              sub: priceTrend !== null
-                ? priceTrend > 0 ? "가격 상승" : priceTrend < 0 ? "가격 하락" : "변동 없음"
-                : "데이터 수집 중",
+              value: priceTrend !== null ? `${priceTrend > 0 ? "▲" : priceTrend < 0 ? "▼" : "─"} ${Math.abs(priceTrend)}%` : "—",
+              sub: priceTrend !== null ? (priceTrend > 0 ? "가격 상승 중" : priceTrend < 0 ? "가격 하락 중" : "변동 없음") : "데이터 수집 중",
               accent: priceTrend > 0 ? "#f87171" : priceTrend < 0 ? "#4ade80" : "#d4a843",
+              icon: "📈",
               sparkline: weightHistory,
             },
           ].map((card, i) => (
             <div key={i} style={{
-              background: "#0e1114", border: "1px solid #1a1d22",
-              borderTop: `2px solid ${card.accent}`, borderRadius: 4,
-              padding: "14px 16px",
+              background: "#111420",
+              border: "1px solid #1f2330",
+              borderTop: `3px solid ${card.accent}`,
+              borderRadius: 6,
+              padding: "16px 18px",
             }}>
-              <div style={{ fontSize: 9, color: "#4a4e58", letterSpacing: "0.12em", marginBottom: 8, fontFamily: "'Noto Sans KR', sans-serif" }}>
-                {card.label}
+              <div style={{ fontSize: 10, color: "#5c6070", letterSpacing: "0.1em", marginBottom: 10, fontFamily: "'Noto Sans KR', sans-serif", display: "flex", alignItems: "center", gap: 6 }}>
+                <span>{card.icon}</span> {card.label}
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
                 <div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: card.accent, marginBottom: 3 }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: card.accent, marginBottom: 5, letterSpacing: "-0.01em" }}>
                     {card.value}
                   </div>
-                  <div style={{ fontSize: 10, color: "#4a4e58", fontFamily: "'Noto Sans KR', sans-serif" }}>
+                  <div style={{ fontSize: 11, color: "#7a8090", fontFamily: "'Noto Sans KR', sans-serif" }}>
                     {card.sub}
                   </div>
                 </div>
@@ -245,74 +249,106 @@ export default function App() {
           ))}
         </div>
 
-        {/* Shop ranking table */}
-        <div style={{ background: "#0e1114", border: "1px solid #1a1d22", borderRadius: 4, overflow: "hidden" }}>
+        {/* Shop table */}
+        <div style={{ background: "#111420", border: "1px solid #1f2330", borderRadius: 8, overflow: "hidden" }}>
 
-          {/* Table header */}
+          {/* Table title */}
           <div style={{
-            padding: "12px 20px", borderBottom: "1px solid #1a1d22",
-            display: "grid", gridTemplateColumns: "40px 1fr 120px 100px",
-            gap: 12, alignItems: "center",
+            padding: "14px 22px",
+            borderBottom: "1px solid #1f2330",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            background: "#0f1119",
           }}>
-            <div style={{ fontSize: 9, color: "#4a4e58", letterSpacing: "0.12em" }}>순위</div>
-            <div style={{ fontSize: 9, color: "#4a4e58", letterSpacing: "0.12em" }}>쇼핑몰 / 상품명</div>
-            <div style={{ fontSize: 9, color: "#4a4e58", letterSpacing: "0.12em", textAlign: "right" }}>가격</div>
-            <div style={{ fontSize: 9, color: "#4a4e58", letterSpacing: "0.12em", textAlign: "center" }}>링크</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 3, height: 16, background: "#d4a843", borderRadius: 2 }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#c8cad4", letterSpacing: "0.08em" }}>
+                {selectedWeight}oz ({WEIGHTS.find(w => w.oz === selectedWeight)?.g}g) 쇼핑몰 순위
+              </span>
+            </div>
+            <span style={{ fontSize: 10, color: "#5c6070", fontFamily: "'Noto Sans KR', sans-serif" }}>
+              배송비 별도 기준
+            </span>
+          </div>
+
+          {/* Column headers */}
+          <div style={{
+            padding: "10px 22px",
+            display: "grid", gridTemplateColumns: "56px 1fr 140px 110px",
+            gap: 12, alignItems: "center",
+            borderBottom: "1px solid #181b24",
+            background: "#0d1016",
+          }}>
+            {["순위", "쇼핑몰 / 상품명", "가격", "바로가기"].map((h, i) => (
+              <div key={i} style={{
+                fontSize: 9, color: "#5c6070", letterSpacing: "0.14em",
+                textAlign: i >= 2 ? "right" : i === 3 ? "center" : "left",
+              }}>
+                {h}
+              </div>
+            ))}
           </div>
 
           {loading ? (
-            <div style={{ padding: "48px 20px", textAlign: "center", color: "#4a4e58", fontSize: 12, fontFamily: "'Noto Sans KR', sans-serif" }}>
-              데이터 로딩 중...
+            <div style={{ padding: "56px 22px", textAlign: "center" }}>
+              <div style={{ fontSize: 24, marginBottom: 12 }}>⏳</div>
+              <div style={{ fontSize: 13, color: "#5c6070", fontFamily: "'Noto Sans KR', sans-serif" }}>
+                데이터 로딩 중...
+              </div>
             </div>
           ) : shops.length === 0 ? (
-            <div style={{ padding: "48px 20px", textAlign: "center", color: "#4a4e58", fontSize: 12, fontFamily: "'Noto Sans KR', sans-serif" }}>
-              {selectedWeight}oz 데이터 없음 — 다음 수집 시 업데이트됩니다
+            <div style={{ padding: "56px 22px", textAlign: "center" }}>
+              <div style={{ fontSize: 24, marginBottom: 12 }}>🎣</div>
+              <div style={{ fontSize: 13, color: "#5c6070", fontFamily: "'Noto Sans KR', sans-serif" }}>
+                {selectedWeight}oz 데이터 없음 — 다음 수집 시 업데이트됩니다
+              </div>
             </div>
           ) : (
             shops.map((shop, i) => {
-              const isTop3 = i < 3;
-              const rankColor = RANK_COLORS[i] || "#3a3d44";
+              const isFirst = i === 0;
+              const rankColor = RANK_COLORS[i] || "#5c6070";
               const pctVsBest = i > 0 && bestPrice
                 ? (((shop.price - bestPrice) / bestPrice) * 100).toFixed(1)
                 : null;
 
               return (
                 <div key={i} className="shop-row" style={{
-                  padding: "14px 20px", borderBottom: "1px solid #111417",
-                  display: "grid", gridTemplateColumns: "40px 1fr 120px 100px",
+                  padding: "16px 22px",
+                  display: "grid", gridTemplateColumns: "56px 1fr 140px 110px",
                   gap: 12, alignItems: "center",
-                  background: i === 0 ? "#0f1218" : "transparent",
+                  borderBottom: i < shops.length - 1 ? "1px solid #181b24" : "none",
+                  background: isFirst ? "#131825" : "transparent",
                 }}>
+
                   {/* 순위 */}
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                    <div style={{
-                      fontSize: 9, fontWeight: 700, color: isTop3 ? rankColor : "#3a3d44",
-                      letterSpacing: "0.08em",
-                    }}>
-                      {RANK_LABELS[i]}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+                    <div style={{ fontSize: i < 3 ? 20 : 13, lineHeight: 1 }}>
+                      {i < 3 ? RANK_MEDALS[i] : RANK_MEDALS[i]}
                     </div>
-                    {i === 0 && (
-                      <div style={{ fontSize: 8, color: "#d4a843", background: "#1e1800", padding: "1px 4px", borderRadius: 2 }}>
+                    {isFirst && (
+                      <div style={{
+                        fontSize: 8, fontWeight: 700, color: "#0d0f13",
+                        background: "#d4a843", padding: "2px 5px", borderRadius: 2,
+                        letterSpacing: "0.06em",
+                      }}>
                         최저
                       </div>
                     )}
                   </div>
 
                   {/* 쇼핑몰 + 상품명 */}
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{
-                      fontSize: 13, fontWeight: 600,
-                      color: isTop3 ? rankColor : "#6a6e78",
+                      fontSize: 15, fontWeight: 700,
+                      color: isFirst ? "#f0ede4" : i < 3 ? "#c8cad4" : "#8a8e98",
                       fontFamily: "'Noto Sans KR', sans-serif",
-                      marginBottom: 3,
+                      marginBottom: 5,
                     }}>
                       {shop.mall}
                     </div>
                     <div style={{
-                      fontSize: 10, color: "#3a3d44",
+                      fontSize: 11, color: "#5c6070",
                       fontFamily: "'Noto Sans KR', sans-serif",
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                      maxWidth: 320,
                     }}>
                       {shop.title}
                     </div>
@@ -321,20 +357,22 @@ export default function App() {
                   {/* 가격 */}
                   <div style={{ textAlign: "right" }}>
                     <div style={{
-                      fontSize: 16, fontWeight: 700,
-                      color: i === 0 ? "#d4a843" : "#8a8e98",
+                      fontSize: isFirst ? 20 : 17,
+                      fontWeight: 700,
+                      color: isFirst ? "#d4a843" : i < 3 ? "#c8cad4" : "#7a8090",
+                      letterSpacing: "-0.01em",
                     }}>
                       ₩{shop.price.toLocaleString()}
                     </div>
                     {pctVsBest && (
-                      <div style={{ fontSize: 10, color: "#f87171", marginTop: 2 }}>
+                      <div style={{ fontSize: 11, color: "#f87171", marginTop: 3, fontWeight: 600 }}>
                         +{pctVsBest}%
                       </div>
                     )}
                   </div>
 
                   {/* 링크 */}
-                  <div style={{ textAlign: "center" }}>
+                  <div style={{ textAlign: "right" }}>
                     {shop.link ? (
                       <a
                         href={shop.link}
@@ -342,21 +380,20 @@ export default function App() {
                         rel="noopener noreferrer"
                         className="link-btn"
                         style={{
-                          display: "inline-block",
-                          padding: "5px 12px",
-                          fontSize: 10,
-                          background: i === 0 ? "#1e1800" : "#111417",
-                          color: i === 0 ? "#d4a843" : "#5a5e68",
-                          border: `1px solid ${i === 0 ? "#d4a843" : "#2a2d34"}`,
-                          borderRadius: 3,
-                          letterSpacing: "0.06em",
-                          fontFamily: "'IBM Plex Mono', monospace",
+                          padding: "7px 14px",
+                          fontSize: 11, fontWeight: 600,
+                          background: isFirst ? "#d4a843" : "#1c2030",
+                          color: isFirst ? "#0d0f13" : "#9aa0b0",
+                          border: `1px solid ${isFirst ? "#d4a843" : "#2e3340"}`,
+                          borderRadius: 5,
+                          fontFamily: "'Noto Sans KR', sans-serif",
+                          letterSpacing: "0.04em",
                         }}
                       >
-                        보러가기
+                        보러가기 →
                       </a>
                     ) : (
-                      <span style={{ fontSize: 10, color: "#2a2d34" }}>—</span>
+                      <span style={{ fontSize: 11, color: "#2e3340" }}>—</span>
                     )}
                   </div>
                 </div>
@@ -366,11 +403,11 @@ export default function App() {
         </div>
 
         {/* Footer */}
-        <div style={{ marginTop: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 9, color: "#2a2d34", letterSpacing: "0.1em" }}>
+        <div style={{ marginTop: 20, padding: "0 4px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 9, color: "#2e3340", letterSpacing: "0.1em" }}>
             NAVER SHOPPING API · 매일 06:00 / 18:00 업데이트
           </div>
-          <div style={{ fontSize: 9, color: "#2a2d34", letterSpacing: "0.1em" }}>
+          <div style={{ fontSize: 9, color: "#2e3340", letterSpacing: "0.1em" }}>
             가격은 배송비 별도 기준
           </div>
         </div>
