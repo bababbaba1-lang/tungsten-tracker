@@ -4,6 +4,7 @@
 - Google Sheets에 자동 저장
 """
 
+import os
 import requests
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
