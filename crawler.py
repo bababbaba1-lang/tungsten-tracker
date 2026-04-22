@@ -14,8 +14,8 @@ import re
 
 # ─── 설정 ─────────────────────────────────────────────
 SPREADSHEET_ID = "1jWL31J8bqKLE9OC0CW7Q8Ac6HpzpLE2L_q5L5SNGmAA"
-NAVER_CLIENT_ID = "YOUR_NAVER_CLIENT_ID"        # 네이버 개발자센터에서 발급
-NAVER_CLIENT_SECRET = "YOUR_NAVER_CLIENT_SECRET"
+NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID")        # 네이버 개발자센터에서 발급
+NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET")
 
 # 수집할 무게 목록 (oz 기준)
 WEIGHTS = ["1/8", "1/4", "3/8", "1/2", "3/4", "1"]
